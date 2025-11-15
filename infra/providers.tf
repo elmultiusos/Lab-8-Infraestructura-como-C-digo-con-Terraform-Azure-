@@ -15,8 +15,7 @@ provider "azurerm" {
   resource_provider_registrations = "none"
 
   # Permite autenticación con Service Principal (GitHub Actions) o Azure CLI (local)
-  use_cli                    = false
-  use_msi                    = false
-  use_oidc                   = false
-  skip_provider_registration = true
+  use_cli  = false
+  use_msi  = false
+  use_oidc = false
 }
