@@ -6,10 +6,12 @@ terraform {
       version = "~> 4.0"
     }
   }
-  # Backend local temporal - comentar para usar backend remoto
-  # backend "azurerm" {}
+  # Backend remoto en Azure Storage
+  backend "azurerm" {}
 }
 provider "azurerm" {
   features {}
   subscription_id = "a80bb1ba-8502-46b7-80e7-f2901dbb0bab"
+  # Para que no demore mucho al ejecutar 
+  resource_provider_registrations = "none" 
 }

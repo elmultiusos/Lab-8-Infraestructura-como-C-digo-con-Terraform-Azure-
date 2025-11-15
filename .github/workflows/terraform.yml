@@ -1,0 +1,180 @@
+name: "Terraform CI/CD"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - "modules/**"
+      - ".github/workflows/terraform.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - "modules/**"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Acción a ejecutar"
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+env:
+  TF_VERSION: "1.6.0"
+  AZURE_SUBSCRIPTION_ID: "a80bb1ba-8502-46b7-80e7-f2901dbb0bab"
+  WORKING_DIR: "./infra"
+
+jobs:
+  terraform-fmt:
+    name: "Terraform Format"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.WORKING_DIR }}
+
+  terraform-validate:
+    name: "Terraform Validate"
+    runs-on: ubuntu-latest
+    needs: terraform-fmt
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=rg-tfstate-lab8" \
+            -backend-config="storage_account_name=sttfstateelmultiusos" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=lab8/terraform.tfstate"
+        working-directory: ${{ env.WORKING_DIR }}
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ${{ env.WORKING_DIR }}
+
+  terraform-plan:
+    name: "Terraform Plan"
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'plan')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=rg-tfstate-lab8" \
+            -backend-config="storage_account_name=sttfstateelmultiusos" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=lab8/terraform.tfstate"
+        working-directory: ${{ env.WORKING_DIR }}
+
+      - name: Terraform Plan
+        run: terraform plan -var-file=env/dev.tfvars -out=plan.tfplan
+        working-directory: ${{ env.WORKING_DIR }}
+
+      - name: Upload Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: ${{ env.WORKING_DIR }}/plan.tfplan
+
+  terraform-apply:
+    name: "Terraform Apply"
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=rg-tfstate-lab8" \
+            -backend-config="storage_account_name=sttfstateelmultiusos" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=lab8/terraform.tfstate"
+        working-directory: ${{ env.WORKING_DIR }}
+
+      - name: Terraform Apply
+        run: terraform apply -var-file=env/dev.tfvars -auto-approve
+        working-directory: ${{ env.WORKING_DIR }}
+
+  terraform-destroy:
+    name: "Terraform Destroy"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=rg-tfstate-lab8" \
+            -backend-config="storage_account_name=sttfstateelmultiusos" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=lab8/terraform.tfstate"
+        working-directory: ${{ env.WORKING_DIR }}
+
+      - name: Terraform Destroy
+        run: terraform destroy -var-file=env/dev.tfvars -auto-approve
+        working-directory: ${{ env.WORKING_DIR }}

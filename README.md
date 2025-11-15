@@ -1,12 +1,34 @@
 # Lab #8 — Infraestructura como Código con Terraform (Azure)
+
 **Curso:** BluePrints / ARSW  
-**Duración estimada:** 2–3 horas (base) + 1–2 horas (retos)  
-**Última actualización:** 2025-11-09
+**Estudiante:** Juan Buitrago (@elmultiusos)  
+**Última actualización:** 2025-11-15  
+**Estado:** ✅ Infraestructura desplegada y funcionando
+
+> 🎯 **Load Balancer público:** http://4.157.249.175
+
+---
+
+## 📊 Resumen de Implementación
+
+### Infraestructura Desplegada
+
+- **Resource Group:** `lab8-rg` (East US)
+- **Virtual Network:** `lab8-vnet` (10.10.0.0/16)
+  - Subnet Web: 10.10.1.0/24
+  - Subnet Mgmt: 10.10.2.0/24
+- **Load Balancer:** `lab8-lb` (Standard, IP: 4.157.249.175)
+- **Virtual Machines:** 2x Ubuntu 22.04 LTS (Standard_B1s) con nginx
+- **Backend remoto:** Azure Storage (`sttfstateelmultiusos`)
+
+---
 
 ## Propósito
+
 Modernizar el laboratorio de balanceo de carga en Azure usando **Terraform** para definir, aprovisionar y versionar la infraestructura. El objetivo es que los estudiantes diseñen y desplieguen una arquitectura reproducible, segura y con buenas prácticas de _IaC_.
 
 ## Objetivos de aprendizaje
+
 1. Modelar infraestructura de Azure con Terraform (providers, state, módulos y variables).
 2. Desplegar una arquitectura de **alta disponibilidad** con **Load Balancer** (L4) y 2+ VMs Linux.
 3. Endurecer mínimamente la seguridad: **NSG**, **SSH por clave**, **tags**, _naming conventions_.
@@ -19,6 +41,7 @@ Modernizar el laboratorio de balanceo de carga en Azure usando **Terraform** par
 ---
 
 ## Arquitectura objetivo
+
 - **Resource Group** (p. ej. `rg-lab8-<alias>`)
 - **Virtual Network** con 2 subredes:
   - `subnet-web`: VMs detrás de **Azure Load Balancer (público)**
@@ -38,6 +61,7 @@ Modernizar el laboratorio de balanceo de carga en Azure usando **Terraform** par
 ---
 
 ## Requisitos previos
+
 - Cuenta/Subscription en Azure (Azure for Students o equivalente).
 - **Azure CLI** (`az`) y **Terraform >= 1.6** instalados en tu equipo.
 - **SSH key** generada (ej. `ssh-keygen -t ed25519`).
@@ -46,6 +70,7 @@ Modernizar el laboratorio de balanceo de carga en Azure usando **Terraform** par
 ---
 
 ## Estructura del repositorio (sugerida)
+
 ```
 .
 ├─ infra/
@@ -77,6 +102,7 @@ Modernizar el laboratorio de balanceo de carga en Azure usando **Terraform** par
 ---
 
 ## Bootstrap del backend remoto
+
 Primero crea el **Resource Group**, **Storage Account** y **Container** para el _state_:
 
 ```bash
@@ -97,12 +123,15 @@ Completa `infra/backend.hcl.example` con los valores creados y renómbralo a `ba
 ---
 
 ## Variables principales (ejemplo)
+
 En `infra/variables.tf` define:
+
 - `prefix`, `location`, `vm_count`, `admin_username`, `ssh_public_key`
 - `allow_ssh_from_cidr` (tu IPv4 en /32)
 - `tags` (map)
 
 En `infra/env/dev.tfvars`:
+
 ```hcl
 prefix        = "lab8"
 location      = "eastus"
@@ -116,7 +145,9 @@ tags = { owner = "tu-alias", course = "ARSW/BluePrints", env = "dev", expires = 
 ---
 
 ## cloud-init de las VMs
+
 Archivo `infra/cloud-init.yaml` (instala nginx y muestra el hostname):
+
 ```yaml
 #cloud-config
 package_update: true
@@ -131,6 +162,7 @@ runcmd:
 ---
 
 ## Flujo de trabajo local
+
 ```bash
 cd infra
 
@@ -156,6 +188,7 @@ curl http://$(terraform output -raw lb_public_ip)
 ```
 
 **Outputs esperados** (ejemplo):
+
 - `lb_public_ip`
 - `resource_group_name`
 - `vm_names`
@@ -163,7 +196,9 @@ curl http://$(terraform output -raw lb_public_ip)
 ---
 
 ## GitHub Actions (CI/CD con OIDC)
+
 El _workflow_ `.github/workflows/terraform.yml`:
+
 - Ejecuta `fmt`, `validate` y `plan` en cada PR.
 - Publica el plan como artefacto/comentario.
 - Job manual `apply` con _workflow_dispatch_ y aprobación.
@@ -173,6 +208,7 @@ El _workflow_ `.github/workflows/terraform.yml`:
 ---
 
 ## Entregables en TEAMS
+
 1. **Repositorio GitHub** del equipo con:
    - Código Terraform (módulos) y `cloud-init.yaml`.
    - `backend.hcl` **(sin secretos)** y `env/dev.tfvars` (sin llaves privadas).
@@ -185,6 +221,7 @@ El _workflow_ `.github/workflows/terraform.yml`:
 ---
 
 ## Rúbrica (100 pts)
+
 - **Infra desplegada y funcional (40 pts):** LB, 2+ VMs, health probe, NSG correcto.
 - **Buenas prácticas Terraform (20 pts):** módulos, variables, `fmt/validate`, _remote state_.
 - **Seguridad y costos (15 pts):** SSH por clave, NSG mínimo, tags y _naming_; estimación de costos.
@@ -194,6 +231,7 @@ El _workflow_ `.github/workflows/terraform.yml`:
 ---
 
 ## Retos (elige 2+)
+
 - Migrar a **VM Scale Set** con _Custom Script Extension_ o **cloud-init**.
 - Reemplazar LB por **Application Gateway** con _probe_ HTTP y _path-based routing_ (si exponen múltiples apps).
 - **Azure Bastion** para acceso SSH sin IP pública en VMs.
@@ -203,6 +241,7 @@ El _workflow_ `.github/workflows/terraform.yml`:
 ---
 
 ## Limpieza
+
 ```bash
 terraform destroy -var-file=env/dev.tfvars
 ```
@@ -212,6 +251,7 @@ terraform destroy -var-file=env/dev.tfvars
 ---
 
 ## Preguntas de reflexión
+
 - ¿Por qué L4 LB vs Application Gateway (L7) en tu caso? ¿Qué cambiaría?
 - ¿Qué implicaciones de seguridad tiene exponer 22/TCP? ¿Cómo mitigarlas?
 - ¿Qué mejoras harías si esto fuera **producción**? (resiliencia, autoscaling, observabilidad).
@@ -219,4 +259,5 @@ terraform destroy -var-file=env/dev.tfvars
 ---
 
 ## Créditos y material de referencia
+
 - Azure, Terraform, IaC, LB y VMSS (docs oficiales) — revisa enlaces en clase.
